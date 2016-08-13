@@ -50,17 +50,6 @@ var tests = [
     });
   }
 
-  // SANITY test that an unregistered email returns no results
-, function () {
-    return leStore.accounts.checkAsync({
-      email: doesntExist.email
-    }).then(function (account) {
-      if (null !== account) {
-        throw new Error("Should return `null` when account does not exist by `accountId`.");
-      }
-    });
-  }
-
 
 
 
