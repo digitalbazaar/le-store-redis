@@ -146,6 +146,14 @@ var tests = [
       email: goodGuy.email
     }).then(function (account) {
 
+      if (!account) {
+        throw new Error("should have returned account for " + goodGuy.email);
+      }
+
+      if (!account.keypair) {
+        throw new Error("should have returned account.keypair for " + goodGuy.email);
+      }
+
       if (goodGuy.keypair.privateKeyPem !== account.keypair.privateKeyPem) {
         if (account.keypair.privateKeyJwk) {
           throw new Error("Error in test itself (not your fault). TODO: implement checking privateKeyJwk.");
