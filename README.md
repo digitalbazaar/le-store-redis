@@ -9,7 +9,11 @@ See [Help Wanted: Database Plugins (for saving certs)](https://github.com/Daplie
 How to create a custom strategy
 ===============================
 
-Let's say there's some new database AwesomeDB that
+READ THIS README:
+Believe it or not, most of your answers are either right here
+or in the comments in the sample code in `index.js`.
+
+Now, let's say there's some new database AwesomeDB that
 we want to make a plugin for, here's how we'd start:
 
 ```bash
@@ -19,6 +23,7 @@ git clone git@github.com:AwesomeDB/le-store-awesome.git
 
 pushd le-store-awesome
 
+# IMPORTANT: we pull in the 'template' branch, which has the skeleton code
 git pull https://github.com/Daplie/le-store-SPEC.git template
 
 git push
@@ -68,7 +73,27 @@ versions of the private and/or public keys when being passed to the `*Keypair` f
 `privateKeyPem`, `publicKeyPem`, and `privateKeyJwk`. It's easy to generate `publicKeyJwk`
 from `privateKeyJwk` because it is just a copy of the public fields `e` and `n`.
 
+```
+// keypair looks like this
+{ privateKeyPem: '...'
+, publicKeyPem: '...'
+, privateKeyJwk: { ... }
+}
+```
+
 **check**
 
 `checkKeypair` may be called with any of `email`, `accountId`, and `keypair` - which will
 contain only `publicKeyPem` and `publicKeyJwk`.
+
+```
+// opts looks like this
+{
+  email: '...@...'
+, accountId: '...'
+, keypair: {
+    publicKeyPem: '...'
+  , publicKeyJwk: { ... }
+  }
+}
+```
