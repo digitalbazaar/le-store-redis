@@ -94,8 +94,9 @@ var tests = [
   // create a new account
 , function () {
     var account = {
-      receipt: {}
-    , agreeTos: true
+      agreeTos: true
+    , keypair: goodGuy.keypair
+    , receipt: {}
     };
 
     return leStore.accounts.setAsync(goodGuy, account).then(function (account) {
