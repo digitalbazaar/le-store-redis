@@ -12,18 +12,22 @@ module.exports.create = function (options) {
 
     // Accounts
     setKeypair: function (opts, keypair, cb) {
-      // opts.email // optional
-      // opts.accountId // optional
+      // opts.email     // optional
+      // opts.accountId // optional - same as returned from acounts.set(opts, reg)
+
 
       // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
+      // keypair = { privateKeyPem: '...', privateKeyJwk: { ... } }
       cb(null, keypair);
     }
     // Accounts
   , checkKeypair: function (opts, cb) {
       // opts.email // optional
-      // opts.accountId // optional
+      // opts.accountId // optional - same as returned from acounts.set(opts, reg)
 
-      // check db and return null or keypair object with one of privateKeyPem or privateKeyJwk
+
+      // check db and return null or keypair object with one
+      // (or both) of privateKeyPem or privateKeyJwk
       cb(null, { privateKeyPem: '...', privateKeyJwk: {} });
     }
 
@@ -31,12 +35,12 @@ module.exports.create = function (options) {
 
     // Accounts
   , check: function (opts, cb) {
-      // opts.email // optional
-      // opts.accountId // optional
-      // opts.domains // optional
+      // opts.email       // optional
+      // opts.accountId   // optional - same as returned from acounts.set(opts, reg)
+      // opts.domains     // optional - same as set in certificates.set(opts, certs)
 
       // return account from db if it exists, otherwise null
-      cb(null, { id: '...', keypair: { privateKeyJwk: {} }, domains: [] });
+      cb(null, { id: '...', keypair: { privateKeyJwk: {} }/*, domains: []*/ });
     }
     // Accounts
   , set: function (opts, reg, cb) {
@@ -45,6 +49,9 @@ module.exports.create = function (options) {
       // reg.receipt // response from acme server
 
 
+      // You must implement a method to deterministically generate 'id'
+      // For example, you could do this:
+      // var id = crypto.createHash('sha256').update(reg.keypair.publicKeyPem).digest('hex');
       cb(null, { id: '...', email: opts.email, keypair: reg.keypair, receipt: reg.receipt });
     }
 
@@ -56,14 +63,16 @@ module.exports.create = function (options) {
 
     // Certificates
     setKeypair: function (opts, keypair, cb) {
-      // opts.domains
+      // opts.domains - this is an array, but you nly need the first (or any) of them
+
 
       // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
       cb(null, keypair);
     }
     // Certificates
   , checkKeypair: function (opts, cb) {
-      // opts.domains
+      // opts.domains - this is an array, but you only need the first (or any) of them
+
 
       // check db and return null or keypair object with one of privateKeyPem or privateKeyJwk
       cb(null, { privateKeyPem: '...', privateKeyJwk: {} });
@@ -78,6 +87,7 @@ module.exports.create = function (options) {
       // opts.email // optional
       // opts.accountId // optional
 
+
       // return certificate PEMs from db if they exist, otherwise null
       // optionally include expiresAt and issuedAt, if they are known exactly
       // (otherwise they will be read from the cert itself later)
@@ -85,13 +95,14 @@ module.exports.create = function (options) {
     }
     // Certificates
   , set: function (opts, pems, cb) {
-      // opts.domains
-      // opts.email // optional
-      // opts.accountId // optional
+      // opts.domains   // each of these must be indexed
+      // opts.email     // optional, should be indexed
+      // opts.accountId // optional - same as set by you in accounts.set(opts, keypair) above
 
       // pems.privkey
       // pems.cert
       // pems.chain
+
 
       // SAVE to the database, index the email address, the accountId, and alias the domains
       cb(null, pems);
