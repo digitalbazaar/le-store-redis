@@ -1,11 +1,17 @@
-'use strict';
+/*
+ * Redis storage strategy for node-letsencrypt.
+ *
+ * Copyright (c) 2016 Digital Bazaar, Inc. All rights reserved.
+ */
+var crypto = require('crypto');
+var redis = require('redis');
 
 module.exports.create = function(options) {
   var defaults = {
-
-    redisOptions: {
-    }
+    redisOptions: options.redisOptions || {}
   };
+
+  var client = redis.createClient(defaults.redisOptions);
 
   function redisSetAccountKeypair(options, keypair, callback) {
     // options.email     // optional
@@ -35,16 +41,30 @@ module.exports.create = function(options) {
     callback(null, { id: '...', keypair: { privateKeyJwk: {} }/*, domains: []*/ });
   }
 
+  /**
+   * Stores an account in the database.
+   *
+   * @param {Object[]} options - options passed to storage called
+   * @param {string} options[].email - email address associated with 
+   *   registration.
+   * @param {Object[]} reg - ACME registration information.
+   * @param {string} reg[].keypair - keypair used for registration.
+   * @param {string} reg[].receipt - ACME registration receipt.
+   * @param {Function} callback(err, account) - called after storage attempt.
+   */
   function redisSetAccount(options, reg, callback) {
-    // options.email
-    // reg.keypair
-    // reg.receipt // response from acme server
+    var accountId = crypto.createHash('sha256').update(reg.keypair.publicKeyPem)
+      .digest('hex');
+    var account = {
+      id: accountId,
+      email: options.email,
+      keypair: reg.keypair,
+      receipt: reg.receipt
+    };
 
+    client.hset(accountId, 'account', account, redis.print);
 
-    // You must implement a method to deterministically generate 'id'
-    // For example, you could do this:
-    // var id = crypto.createHash('sha256').update(reg.keypair.publicKeyPem).digest('hex');
-    callback(null, { id: '...', email: options.email, keypair: reg.keypair, receipt: reg.receipt });
+    callback(null, account);
   }
 
   function getRedisOptions() {
