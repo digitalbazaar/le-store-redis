@@ -1,126 +1,111 @@
 'use strict';
 
-module.exports.create = function (options) {
+module.exports.create = function(options) {
+  var defaults = {
 
-
-
-  var defaults = {};
-
-
-
-  var accounts = {
-
-    // Accounts
-    setKeypair: function (opts, keypair, cb) {
-      // opts.email     // optional
-      // opts.accountId // optional - same as returned from acounts.set(opts, reg)
-
-
-      // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
-      // keypair = { privateKeyPem: '...', privateKeyJwk: { ... } }
-      cb(null, keypair);
+    redisOptions: {
     }
-    // Accounts
-  , checkKeypair: function (opts, cb) {
-      // opts.email // optional
-      // opts.accountId // optional - same as returned from acounts.set(opts, reg)
-
-
-      // check db and return null or keypair object with one
-      // (or both) of privateKeyPem or privateKeyJwk
-      cb(null, { privateKeyPem: '...', privateKeyJwk: {} });
-    }
-
-
-
-    // Accounts
-  , check: function (opts, cb) {
-      // opts.email       // optional
-      // opts.accountId   // optional - same as returned from acounts.set(opts, reg)
-      // opts.domains     // optional - same as set in certificates.set(opts, certs)
-
-      // return account from db if it exists, otherwise null
-      cb(null, { id: '...', keypair: { privateKeyJwk: {} }/*, domains: []*/ });
-    }
-    // Accounts
-  , set: function (opts, reg, cb) {
-      // opts.email
-      // reg.keypair
-      // reg.receipt // response from acme server
-
-
-      // You must implement a method to deterministically generate 'id'
-      // For example, you could do this:
-      // var id = crypto.createHash('sha256').update(reg.keypair.publicKeyPem).digest('hex');
-      cb(null, { id: '...', email: opts.email, keypair: reg.keypair, receipt: reg.receipt });
-    }
-
   };
 
+  function redisSetAccountKeypair(options, keypair, callback) {
+    // options.email     // optional
+    // options.accountId // optional - same as returned from acounts.set(options, reg)
+
+    // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
+    // keypair = { privateKeyPem: '...', privateKeyJwk: { ... } }
+    callback(null, keypair);
+  }
+
+  function redisCheckAccountKeypair(options, callback) {
+    // options.email // optional
+    // options.accountId // optional - same as returned from acounts.set(options, reg)
 
 
-  var certificates = {
+    // check db and return null or keypair object with one
+    // (or both) of privateKeyPem or privateKeyJwk
+    callback(null, { privateKeyPem: '...', privateKeyJwk: {} });
+  }
 
-    // Certificates
-    setKeypair: function (opts, keypair, cb) {
-      // opts.domains - this is an array, but you nly need the first (or any) of them
+  function redisCheckAccount(options, callback) {
+    // options.email       // optional
+    // options.accountId   // optional - same as returned from acounts.set(options, reg)
+    // options.domains     // optional - same as set in certificates.set(options, certs)
 
+    // return account from db if it exists, otherwise null
+    callback(null, { id: '...', keypair: { privateKeyJwk: {} }/*, domains: []*/ });
+  }
 
-      // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
-      cb(null, keypair);
-    }
-    // Certificates
-  , checkKeypair: function (opts, cb) {
-      // opts.domains - this is an array, but you only need the first (or any) of them
-
-
-      // check db and return null or keypair object with one of privateKeyPem or privateKeyJwk
-      cb(null, { privateKeyPem: '...', privateKeyJwk: {} });
-    }
-
-
-
-    // Certificates
-  , check: function (opts, cb) {
-      // You will be provided one of these (which should be tried in this order)
-      // opts.domains
-      // opts.email // optional
-      // opts.accountId // optional
+  function redisSetAccount(options, reg, callback) {
+    // options.email
+    // reg.keypair
+    // reg.receipt // response from acme server
 
 
-      // return certificate PEMs from db if they exist, otherwise null
-      // optionally include expiresAt and issuedAt, if they are known exactly
-      // (otherwise they will be read from the cert itself later)
-      cb(null, { privkey: 'PEM', cert: 'PEM', chain: 'PEM', domains: [], accountId: '...' });
-    }
-    // Certificates
-  , set: function (opts, pems, cb) {
-      // opts.domains   // each of these must be indexed
-      // opts.email     // optional, should be indexed
-      // opts.accountId // optional - same as set by you in accounts.set(opts, keypair) above
+    // You must implement a method to deterministically generate 'id'
+    // For example, you could do this:
+    // var id = crypto.createHash('sha256').update(reg.keypair.publicKeyPem).digest('hex');
+    callback(null, { id: '...', email: options.email, keypair: reg.keypair, receipt: reg.receipt });
+  }
 
-      // pems.privkey
-      // pems.cert
-      // pems.chain
+  function getRedisOptions() {
+    // merge options with default settings and then return them
+    return options;
+  }
 
+  function redisSetCertificateKeypair(options, keypair, callback) {
+    // options.domains - this is an array, but you nly need the first (or any) of them
 
-      // SAVE to the database, index the email address, the accountId, and alias the domains
-      cb(null, pems);
-    }
-
-  };
+    // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
+    callback(null, keypair);
+  }
+  function redisCheckCertificateKeypair(options, callback) {
+    // options.domains - this is an array, but you only need the first (or any) of them
 
 
+    // check db and return null or keypair object with one of privateKeyPem or privateKeyJwk
+    callback(null, { privateKeyPem: '...', privateKeyJwk: {} });
+  }
+
+  function redisCheckCertificate(options, callback) {
+    // You will be provided one of these (which should be tried in this order)
+    // options.domains
+    // options.email // optional
+    // options.accountId // optional
+
+
+    // return certificate PEMs from db if they exist, otherwise null
+    // optionally include expiresAt and issuedAt, if they are known exactly
+    // (otherwise they will be read from the cert itself later)
+    callback(null, { privkey: 'PEM', cert: 'PEM', chain: 'PEM', domains: [], accountId: '...' });
+  }
+
+  function redisSetCertificate(options, pems, callback) {
+    // options.domains   // each of these must be indexed
+    // options.email     // optional, should be indexed
+    // options.accountId // optional - same as set by you in accounts.set(options, keypair) above
+
+    // pems.privkey
+    // pems.cert
+    // pems.chain
+
+    // SAVE to the database, index the email address, the accountId, and alias the domains
+    callback(null, pems);
+  }
 
   return {
-    getOptions: function () {
-      // merge options with default settings and then return them
-      return options;
+    getOptions: getRedisOptions,
+    accounts: {
+      setKeypair: redisSetAccountKeypair,
+      checkKeypair: redisCheckAccountKeypair,
+      check: redisCheckAccount,
+      set: redisSetAccount,
+    },
+    certificates: {
+      setKeypair: redisSetCertificateKeypair,
+      checkKeypair: redisCheckCertificateKeypair,
+      check: redisCheckCertificate,
+      set: redisSetCertificate,
     }
-  , accounts: accounts
-  , certificates: certificates
   };
-
-
 
 };
