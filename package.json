@@ -1,0 +1,29 @@
+{
+  "name": "le-store-redis",
+  "version": "0.2.0",
+  "description": "The Redis storage strategy for node-letsencrypt",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/basic.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digitalbazaar/le-store-redis.git"
+  },
+  "keywords": [
+    "le-store",
+    "le-store-",
+    "letsencrypt",
+    "node"
+  ],
+  "author": "Digital Bazaar <support@digitalbazaar.com> (https://digitalbazaar.com/)",
+  "license": "(MIT OR Apache-2.0)",
+  "bugs": {
+    "url": "https://github.com/digitalbazaar/le-store-redis/issues"
+  },
+  "homepage": "https://github.com/digitalbazaar/le-store-redis#readme",
+  "dependencies": {
+    "bluebird": "^3.4.1",
+    "pyconf": "^1.1.2"
+  }
+}
