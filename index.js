@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2016 Digital Bazaar, Inc. All rights reserved.
  */
+var _ = require('lodash');
 var async = require('async');
 var crypto = require('crypto');
 var redis = require('redis');
@@ -28,7 +29,7 @@ module.exports.create = function(options) {
   var client = redis.createClient(defaults.redisOptions);
 
   function redisSetAccountKeypair(options, keypair, callback) {
-    console.log("redisSetAccountKeypair", options);
+    console.log("redisSetAccountKeypair", options, keypair);
     // options.email     // optional
     // options.accountId // optional - same as returned from acounts.set(options, reg)
     var jsonKeypair = JSON.stringify(keypair);
@@ -127,31 +128,30 @@ module.exports.create = function(options) {
     console.log("redisSetAccount", options, reg);
     var accountId = 'account-' + crypto.createHash('sha256')
       .update(reg.keypair.publicKeyPem).digest('hex');
-    var account = {
-      id: accountId,
-      email: options.email,
-      agreeTos: reg.agreeTos,
-      keypair: reg.keypair,
-      receipt: reg.receipt
-    };
+    var account = _.cloneDeep(reg);
+    account.id = accountId;
+    account.accountId = accountId;
+    account.email = options.email;
+    account.agreeTos = options.agreeTos || reg.agreeTos;
+
     var jsonAccount = JSON.stringify(account);
 
     async.parallel([
       function(callback) {
-        if(account.email) {
+        if(options.email) {
           // index the account by email if one was provided
           var emailAccountIndex = 'account-email-' +
-            crypto.createHash('sha256').update(account.email).digest('hex');
+            crypto.createHash('sha256').update(options.email).digest('hex');
 
           return client.set(emailAccountIndex, jsonAccount, callback);
         }
         callback(null, 'NOP');
       },
       function(callback) {
-        if(account.id) {
+        if(options.accountId) {
           // index the keypair by accountId if one was provided
           var accountIndex = 'account-' +
-            crypto.createHash('sha256').update(account.id).digest('hex');
+            crypto.createHash('sha256').update(options.accountId).digest('hex');
 
           return client.set(accountIndex, jsonAccount, callback);
         }
