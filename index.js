@@ -28,32 +28,52 @@ module.exports.create = function(options) {
   };
   var client = redis.createClient(defaults.redisOptions);
 
+  function createIndex(indexName, indexData, value, callback) {
+    // generate the index value
+    var index = indexName + '-' +
+      crypto.createHash('sha256').update(indexData).digest('hex');
+
+    client.set(index, value, callback);
+  }
+
+  function getByIndex(indexName, indexData, callback) {
+    // generate the index
+    var index = indexName + '-' +
+      crypto.createHash('sha256').update(indexData).digest('hex');
+
+    // fetch the value of the index
+    client.get(index, function(err, reply) {
+      if(err) {
+        return callback(err);
+      }
+      if(!reply) {
+        // index does not exist
+        return callback(null, null);
+      }
+
+      // fetch the actual data
+      client.get(reply, deserializeJson(callback));
+    });
+  }
+
   function redisSetAccountKeypair(options, keypair, callback) {
     console.log("redisSetAccountKeypair", options, keypair);
     // options.email     // optional
     // options.accountId // optional - same as returned from acounts.set(options, reg)
+    var keypairId = 'keypair-' +
+      crypto.createHash('sha256').update(keypair.publicKeyPem).digest('hex');
     var jsonKeypair = JSON.stringify(keypair);
 
     async.parallel([
       function(callback) {
-        if(options.email) {
-          // index the keypair by email if one was provided
-          var emailKeypairIndex = 'keypair-email-' +
-            crypto.createHash('sha256').update(options.email).digest('hex');
-
-          return client.set(emailKeypairIndex, jsonKeypair, callback);
-        }
-        callback(null, keypair);
+        // write the keypair data
+        client.set(keypairId, jsonKeypair, callback);
       },
       function(callback) {
-        if(options.accountId) {
-          // index the keypair by accountId if one was provided
-          var accountKeypairIndex = 'keypair-account-' +
-            crypto.createHash('sha256').update(options.accountId).digest('hex');
-
-          return client.set(accountKeypairIndex, jsonKeypair, callback);
+        if(options.email) {
+          return createIndex('idx-e2k', options.email, keypairId, callback);
         }
-        callback(null, keypair);
+        callback(null, 'NOP');
       }], function(err, results) {
         if(err) {
           return callback(err);
@@ -79,13 +99,9 @@ module.exports.create = function(options) {
     console.log("redisCheckAccountKeypair", options);
 
     if(options.email) {
-      var emailKeypairIndex = 'keypair-email-' + crypto.createHash('sha256')
-        .update(options.email).digest('hex');
-      return client.get(emailKeypairIndex, deserializeJson(callback));
+      return getByIndex('idx-e2k', options.email, callback);
     } else if(options.accountId) {
-      var accountKeypairIndex = 'keypair-account-' + crypto.createHash('sha256')
-        .update(options.accountId).digest('hex');
-      return client.get(accountKeypairIndex, deserializeJson(callback));
+      return getByIndex('idx-a2k', options.accountId, callback);
     }
 
     callback(new Error('le-store-redis.redisCheckAccountKeypair ' +
@@ -99,7 +115,7 @@ module.exports.create = function(options) {
     // options.domains     // optional - same as set in certificates.set(options, certs)
 
     if(options.email) {
-      var emailAccountIndex = 'account-email-' +
+      var emailAccountIndex = 'idx-e2a-' +
         crypto.createHash('sha256').update(options.email).digest('hex');
       return client.get(emailAccountIndex, deserializeJson(callback));
     } else if(options.accountId) {
@@ -140,7 +156,7 @@ module.exports.create = function(options) {
       function(callback) {
         if(account.email) {
           // index the account by email if one was provided
-          var emailAccountIndex = 'account-email-' +
+          var emailAccountIndex = 'idx-e2a-' +
             crypto.createHash('sha256').update(account.email).digest('hex');
 
           return client.set(emailAccountIndex, jsonAccount, callback);
