@@ -149,11 +149,7 @@ module.exports.create = function(options) {
       },
       function(callback) {
         if(account.id) {
-          // index the keypair by accountId if one was provided
-          var accountIndex = 'account-' +
-            crypto.createHash('sha256').update(account.id).digest('hex');
-
-          return client.set(accountIndex, jsonAccount, callback);
+          return client.set(accountId, jsonAccount, callback);
         }
         callback(null, 'NOP');
       }], function(err, results) {
