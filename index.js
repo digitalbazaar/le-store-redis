@@ -70,6 +70,7 @@ module.exports.create = function(options) {
         client.set(keypairId, jsonKeypair, callback);
       },
       function(callback) {
+        // create an index for email if one was given
         if(options.email) {
           return createIndex('idx-e2k', options.email, keypairId, callback);
         }
@@ -115,9 +116,7 @@ module.exports.create = function(options) {
     // options.domains     // optional - same as set in certificates.set(options, certs)
 
     if(options.email) {
-      var emailAccountIndex = 'idx-e2a-' +
-        crypto.createHash('sha256').update(options.email).digest('hex');
-      return client.get(emailAccountIndex, deserializeJson(callback));
+      return getByIndex('idx-e2a', options.email, callback);
     } else if(options.accountId) {
       return client.get(options.accountId, deserializeJson(callback));
     } else if(options.domains) {
@@ -154,18 +153,11 @@ module.exports.create = function(options) {
 
     async.parallel([
       function(callback) {
-        if(account.email) {
-          // index the account by email if one was provided
-          var emailAccountIndex = 'idx-e2a-' +
-            crypto.createHash('sha256').update(account.email).digest('hex');
-
-          return client.set(emailAccountIndex, jsonAccount, callback);
-        }
-        callback(null, 'NOP');
+        return client.set(accountId, jsonAccount, callback);
       },
       function(callback) {
-        if(account.id) {
-          return client.set(accountId, jsonAccount, callback);
+        if(account.email) {
+          return createIndex('idx-e2a', account.email, account.id, callback);
         }
         callback(null, 'NOP');
       }], function(err, results) {
