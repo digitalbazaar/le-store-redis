@@ -138,20 +138,20 @@ module.exports.create = function(options) {
 
     async.parallel([
       function(callback) {
-        if(options.email) {
+        if(account.email) {
           // index the account by email if one was provided
           var emailAccountIndex = 'account-email-' +
-            crypto.createHash('sha256').update(options.email).digest('hex');
+            crypto.createHash('sha256').update(account.email).digest('hex');
 
           return client.set(emailAccountIndex, jsonAccount, callback);
         }
         callback(null, 'NOP');
       },
       function(callback) {
-        if(options.accountId) {
+        if(account.id) {
           // index the keypair by accountId if one was provided
           var accountIndex = 'account-' +
-            crypto.createHash('sha256').update(options.accountId).digest('hex');
+            crypto.createHash('sha256').update(account.id).digest('hex');
 
           return client.set(accountIndex, jsonAccount, callback);
         }
