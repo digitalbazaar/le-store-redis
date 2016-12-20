@@ -23,8 +23,9 @@
   },
   "homepage": "https://github.com/digitalbazaar/le-store-redis#readme",
   "dependencies": {
-    "redis": "^2.6.3",
+    "async": "^2.1.4",
     "bluebird": "^3.4.1",
-    "pyconf": "^1.1.2"
+    "pyconf": "^1.1.2",
+    "redis": "^2.6.3"
   }
 }
