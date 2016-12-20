@@ -88,7 +88,7 @@ module.exports.create = function(options) {
   /**
    * Retrieves a keypair associated with an account from the database.
    *
-   * @param {Object[]} options - options passed to storage called
+   * @param {Object[]} options - options passed to storage call
    * @param {string} options[].email - email address associated with
    *   registration.
    * @param {string} options[].accountId - account ID as returned from
@@ -177,7 +177,7 @@ module.exports.create = function(options) {
   }
 
   function redisSetCertificateKeypair(options, keypair, callback) {
-    console.log("redisSetCertificateKeypair", options);
+    console.log("redisSetCertificateKeypair", options, keypair);
     // options.domains - this is an array, but you nly need the first (or any) of them
 
     // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
@@ -199,6 +199,16 @@ module.exports.create = function(options) {
     // options.email // optional
     // options.accountId // optional
 
+    if(options.domains) {
+      return getByIndex('idx-d2c', options.domains[0], callback);
+    } else if(options.email) {
+      return getByIndex('idx-e2c', options.email, callback);
+    } else if(options.accountId) {
+      return getByIndex('idx-a2c', options.accoundId, callback);
+    }
+
+    callback(new Error('le-store-redis.redisCheckCertificate requires ' +
+      'options.domains, options.email, or options.accoundId'));
 
     // return certificate PEMs from db if they exist, otherwise null
     // optionally include expiresAt and issuedAt, if they are known exactly
@@ -207,7 +217,7 @@ module.exports.create = function(options) {
   }
 
   function redisSetCertificate(options, pems, callback) {
-    console.log("redisSetCertificate", options);
+    console.log("redisSetCertificate", options, pems);
     // options.domains   // each of these must be indexed
     // options.email     // optional, should be indexed
     // options.accountId // optional - same as set by you in accounts.set(options, keypair) above
@@ -216,8 +226,47 @@ module.exports.create = function(options) {
     // pems.cert
     // pems.chain
 
-    // SAVE to the database, index the email address, the accountId, and alias the domains
-    callback(null, pems);
+    var certId = 'cert-' + crypto.createHash('sha256')
+      .update(pems.cert).digest('hex');
+    var cert = _.cloneDeep(pems);
+
+    var jsonCert = JSON.stringify(cert);
+
+    async.parallel([
+      function(callback) {
+        // write the cert to the database
+        return client.set(certId, jsonCert, callback);
+      },
+      function(callback) {
+        if(options.accountId) {
+          // create an accountId to cert index
+          return createIndex('idx-a2c', options.accountId, certId, callback);
+        }
+        callback();
+      },
+      function(callback) {
+        if(options.email) {
+          // create an email to cert index
+          return createIndex('idx-e2c', options.email, certId, callback);
+        }
+        callback();
+      },
+      function(callback) {
+        if(options.domains) {
+          // create a domain to cert index
+          return async.each(options.domains, function(domain, callback) {
+            createIndex('idx-d2c', domain, certId, callback);
+          }, function(err) {
+            callback(err);
+          });
+        }
+        callback();
+      }], function(err) {
+        if(err) {
+          return callback(err);
+        }
+        callback(null, cert);
+    });
   }
 
   return {
