@@ -179,6 +179,31 @@ module.exports.create = function(options) {
   function redisSetCertificateKeypair(options, keypair, callback) {
     console.log("redisSetCertificateKeypair", options, keypair);
     // options.domains - this is an array, but you nly need the first (or any) of them
+    var keypairId = 'keypair-' + crypto.createHash('sha256')
+      .update(keypair.publicKeyPem).digest('hex');
+    var jsonKeypair = JSON.stringify(keypair);
+
+    async.parallel([
+      function(callback) {
+        // write the cert to the database
+        return client.set(keypairId, jsonKeypair, callback);
+      },
+      function(callback) {
+        if(options.domains) {
+          // create a domain to keypair index
+          return async.each(options.domains, function(domain, callback) {
+            createIndex('idx-d2k', domain, keypairId, callback);
+          }, function(err) {
+            callback(err);
+          });
+        }
+        callback();
+      }], function(err) {
+        if(err) {
+          return callback(err);
+        }
+        callback(null, keypair);
+    });
 
     // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
     callback(null, keypair);
@@ -187,9 +212,12 @@ module.exports.create = function(options) {
     console.log("redisCheckCertificateKeypair", options);
     // options.domains - this is an array, but you only need the first (or any) of them
 
+    if(options.domains && options.domains[0]) {
+      return getByIndex('idx-d2k', options.domains[0], callback);
+    }
 
-    // check db and return null or keypair object with one of privateKeyPem or privateKeyJwk
-    callback(null, { privateKeyPem: '...', privateKeyJwk: {} });
+    callback(new Error('le-store-redis.redisCheckCertificateKeypair requires ' +
+      'options.domains'));
   }
 
   function redisCheckCertificate(options, callback) {
@@ -209,11 +237,6 @@ module.exports.create = function(options) {
 
     callback(new Error('le-store-redis.redisCheckCertificate requires ' +
       'options.domains, options.email, or options.accoundId'));
-
-    // return certificate PEMs from db if they exist, otherwise null
-    // optionally include expiresAt and issuedAt, if they are known exactly
-    // (otherwise they will be read from the cert itself later)
-    callback(null, { privkey: 'PEM', cert: 'PEM', chain: 'PEM', domains: [], accountId: '...' });
   }
 
   function redisSetCertificate(options, pems, callback) {
