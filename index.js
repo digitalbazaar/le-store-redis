@@ -2,64 +2,101 @@
  * Redis storage strategy for node-letsencrypt.
  *
  * Copyright (c) 2016 Digital Bazaar, Inc. All rights reserved.
+ *
+ * The Redis storage strategy for node-letsencrypt is capable of storing and
+ * retrieving keypairs, accounts, certificates, and certificate keypairs
+ * from a Redis database. It is most useful in production setups where
+ * multiple load balancers need to provide HTTPS-based proxying
+ * for a number of application front-end systems. It is strongly advised
+ * that any production Redis system is deployed using at least password-based
+ * authentication in addition to additional protections like IP-based
+ * request limiting and client-side TLS certificates. Unauthorized access
+ * to the Redis database enables an attacker to spoof any certificate stored
+ * in the database.
+ *
+ * The Redis database is designed to be scalable to at least thousands of
+ * domains. Scalability past tens of thousands of domains has not been tested,
+ * but should work (in theory) based on the indexing layout and available
+ * memory.
+ *
+ * There are three primary types of data that are stored in the database:
+ *
+ * Keypairs are stored in keypair-HASH entries.
+ * Accounts are stored in account-HASH entries.
+ * Certificates are stored in cert-HASH entries.
+ *
+ * There are five types of indexes in the database:
+ *
+ * idx-e2a-HASH entries store email to account mappings.
+ * idx-e2k-HASH entries store email to keypair mappings.
+ * idx-e2c-HASH entries store email to certificate mappings.
+ * idx-a2c-HASH entries store account to certificate mappings.
+ * idx-d2c-HASH entries store domain to certificate mappings.
+ *
+ * Options to the Redis driver may be passed in via redisOptions. More on
+ * Redis options can be viewed at http://redis.js.org/#api-rediscreateclient
  */
 var _ = require('lodash');
 var async = require('async');
 var crypto = require('crypto');
 var redis = require('redis');
 
-// utility function to deserialize data from JSON
-function deserializeJson(callback) {
-  return function(err, result) {
-    if(err) {
-      return callback(err);
-    }
-    if(result) {
-      return callback(null, JSON.parse(result));
-    }
-
-    callback(err, result);
-  };
-}
-
+/**
+ * Creates a new instance of a le-store-redis storage plugin.
+ *
+ * @param {Object[]} options - options passed to storage called
+ * @param {string} options[].redisOptions - options that are useful to the
+ *   Redis driver. Full documentation for all the Redis options can be viewed
+ *   at http://redis.js.org/#api-rediscreateclient. By default,
+ *   database 3 is selected, and the max retry delay is 60 seconds.
+ *   This is to ensure that the plugin doesn't overwrite the default
+ *   database, keeps trying to reconnect frequently, and recovers
+ *   within a minute of a redis server coming back online.
+ * @return an object that follows the le-store-SPEC interface.
+ */
 module.exports.create = function(options) {
-  var defaults = {
-    redisOptions: options.redisOptions || {}
-  };
-  var client = redis.createClient(defaults.redisOptions);
+  var moduleOptions = getRedisOptions();
+  var client = redis.createClient(moduleOptions.redisOptions);
 
-  function createIndex(indexName, indexData, value, callback) {
-    // generate the index value
-    var index = indexName + '-' +
-      crypto.createHash('sha256').update(indexData).digest('hex');
+  /**
+   * Gets the default options merged with the options passed to the plugin.
+   *
+   * @return {Object} default options overlayed with provided options.
+   */
+  function getRedisOptions() {
+    var defaults = {
+      debug: false,
+      redisOptions: {
+        db: 3,
+        retry_strategy: function(options) {
+          // reconnect after 60 seconds, keep trying forever
+          return 60 * 1000;
+        }
+      }
+    };
+    var mergedOptions = _.merge(defaults, options);
 
-    client.set(index, value, callback);
+    _debug('le-store-redis.getRedisOptions', mergedOptions);
+
+    return mergedOptions;
   }
 
-  function getByIndex(indexName, indexData, callback) {
-    // generate the index
-    var index = indexName + '-' +
-      crypto.createHash('sha256').update(indexData).digest('hex');
-
-    // fetch the value of the index
-    client.get(index, function(err, reply) {
-      if(err) {
-        return callback(err);
-      }
-      if(!reply) {
-        // index does not exist
-        return callback(null, null);
-      }
-
-      // fetch the actual data
-      client.get(reply, deserializeJson(callback));
-    });
-  }
-
+  /**
+   * Creates a new instance of a le-store-redis storage driver.
+   *
+   * @param {Object[]} options - options passed to storage called
+   * @param {string} options[].email - optional email address to associate with
+   *   the keypair.
+   * @param {string} options[].accountId - optional accountId to associate with
+   *   the keypair.
+   * @param {Object} keypair - a keypair provided by the node-letsencrypt
+   *   package.
+   * @param {Function} callback(err, keypair) - called when an error occurs, or
+   *   when a keypair is successfully written to the database.
+   */
   function redisSetAccountKeypair(options, keypair, callback) {
-    console.log("redisSetAccountKeypair", options, keypair);
-    // options.email     // optional
-    // options.accountId // optional - same as returned from acounts.set(options, reg)
+    _debug('le-store-redis.redisSetAccountKeypair',
+      '\noptions:', options, '\nkeypair:', keypair);
     var keypairId = 'keypair-' +
       crypto.createHash('sha256').update(keypair.publicKeyPem).digest('hex');
     var jsonKeypair = JSON.stringify(keypair);
@@ -72,7 +109,7 @@ module.exports.create = function(options) {
       function(callback) {
         // create an index for email if one was given
         if(options.email) {
-          return createIndex('idx-e2k', options.email, keypairId, callback);
+          return _createIndex('idx-e2k', options.email, keypairId, callback);
         }
         callback(null, 'NOP');
       }], function(err, results) {
@@ -97,31 +134,42 @@ module.exports.create = function(options) {
    *   keypair will be null if it was not found.
    */
   function redisCheckAccountKeypair(options, callback) {
-    console.log("redisCheckAccountKeypair", options);
+    _debug('le-store-redis.redisCheckAccountKeypair options:', options);
 
     if(options.email) {
-      return getByIndex('idx-e2k', options.email, callback);
+      return _getByIndex('idx-e2k', options.email, callback);
     } else if(options.accountId) {
-      return getByIndex('idx-a2k', options.accountId, callback);
+      return _getByIndex('idx-a2k', options.accountId, callback);
     }
 
     callback(new Error('le-store-redis.redisCheckAccountKeypair ' +
       'lookup requires options.email or options.accountId.'));
   }
 
+  /**
+   * Checks to see if an account exists in the database. The provided options
+   * describe how the account should be looked up.
+   *
+   * @param {Object[]} options - options passed to storage called
+   * @param {string} options[].email - optional email address to use when
+   *   looking up the account.
+   * @param {string} options[].accountId - optional accountId to use when
+   *   looking up the account.
+   * @param {string} options[].domains - optional domains to use when looking
+   *   up the account.
+   * @param {Function} callback(err, account) - called when an error occurs, or
+   *   when an account is successfully retrieved from the database.
+   */
   function redisCheckAccount(options, callback) {
-    console.log("redisCheckAccount", options);
-    // options.email       // optional
-    // options.accountId   // optional - same as returned from acounts.set(options, reg)
-    // options.domains     // optional - same as set in certificates.set(options, certs)
+    _debug('le-store-redis.redisCheckAccount options:', options);
 
     if(options.email) {
-      return getByIndex('idx-e2a', options.email, callback);
+      return _getByIndex('idx-e2a', options.email, callback);
     } else if(options.accountId) {
-      return client.get(options.accountId, deserializeJson(callback));
+      return client.get(options.accountId, _deserializeJson(callback));
     } else if(options.domains) {
       // FIXME: implement domain indexing
-      return client.get(options.domains, deserializeJson(callback));
+      return client.get(options.domains, _deserializeJson(callback));
     }
 
     callback(new Error('le-store-redis.redisCheckAccount requires ' +
@@ -140,7 +188,8 @@ module.exports.create = function(options) {
    * @param {Function} callback(err, account) - called after storage attempt.
    */
   function redisSetAccount(options, reg, callback) {
-    console.log("redisSetAccount", options, reg);
+    _debug('le-store-redis.redisSetAccount',
+      '\noptions:', options, '\nregistration:', reg);
     var accountId = 'account-' + crypto.createHash('sha256')
       .update(reg.keypair.publicKeyPem).digest('hex');
     var account = _.cloneDeep(reg);
@@ -157,7 +206,7 @@ module.exports.create = function(options) {
       },
       function(callback) {
         if(account.email) {
-          return createIndex('idx-e2a', account.email, account.id, callback);
+          return _createIndex('idx-e2a', account.email, account.id, callback);
         }
         callback(null, 'NOP');
       }], function(err, results) {
@@ -170,15 +219,18 @@ module.exports.create = function(options) {
     });
   }
 
-  function getRedisOptions() {
-    console.log("getRedisOptions", options);
-    // merge options with default settings and then return them
-    return options;
-  }
-
+  /**
+   * Stores a keypair associated with a certificate in the database.
+   *
+   * @param {Object[]} options - options passed to storage call
+   * @param {string} options[].domains - domains that should be associated
+   *   with the certificate via database indexes (to aid in lookups).
+   * @param {Function} callback(err, keypair) - called when an error occurs, or
+   *   when a keypair is successfully written to the database.
+   */
   function redisSetCertificateKeypair(options, keypair, callback) {
-    console.log("redisSetCertificateKeypair", options, keypair);
-    // options.domains - this is an array, but you nly need the first (or any) of them
+    _debug('le-store-redis.redisSetCertificateKeypair',
+      '\noptions:', options, '\nkeypair:', keypair);
     var keypairId = 'keypair-' + crypto.createHash('sha256')
       .update(keypair.publicKeyPem).digest('hex');
     var jsonKeypair = JSON.stringify(keypair);
@@ -192,7 +244,7 @@ module.exports.create = function(options) {
         if(options.domains) {
           // create a domain to keypair index
           return async.each(options.domains, function(domain, callback) {
-            createIndex('idx-d2k', domain, keypairId, callback);
+            _createIndex('idx-d2k', domain, keypairId, callback);
           }, function(err) {
             callback(err);
           });
@@ -204,51 +256,77 @@ module.exports.create = function(options) {
         }
         callback(null, keypair);
     });
-
-    // SAVE to db (as PEM and/or JWK) and index each domain in domains to this keypair
-    callback(null, keypair);
   }
+
+  /**
+   * Retrieves a keypair associated with a certificate from the database.
+   *
+   * @param {Object[]} options - options passed to storage call
+   * @param {string} options[].domains - an array of domains that may be
+   *  associated with the certificate keypair. Only the first domain is used.
+   * @param {Function} callback(err, keypair) - called after storage attempt,
+   *   keypair will be null if it was not found.
+   */
   function redisCheckCertificateKeypair(options, callback) {
-    console.log("redisCheckCertificateKeypair", options);
-    // options.domains - this is an array, but you only need the first (or any) of them
+    _debug('le-store-redis.redisCheckCertificateKeypair options:', options);
 
     if(options.domains && options.domains[0]) {
-      return getByIndex('idx-d2k', options.domains[0], callback);
+      return _getByIndex('idx-d2k', options.domains[0], callback);
     }
 
     callback(new Error('le-store-redis.redisCheckCertificateKeypair requires ' +
       'options.domains'));
   }
 
+  /**
+   * Checks to see if a certificate exists in the database. The provided options
+   * describe how the certificate should be looked up.
+   *
+   * @param {Object[]} options - options passed to check call.
+   * @param {string} options[].domains - domains to use when looking
+   *   up the account. These will be used for the lookup first.
+   * @param {string} options[].email - optional email address to use when
+   *   looking up the certificate.
+   * @param {string} options[].accountId - optional accountId to use when
+   *   looking up the certificate.
+   * @param {Function} callback(err, cert) - called when an error occurs, or
+   *   when a certificate is successfully retrieved from the database.
+   */
   function redisCheckCertificate(options, callback) {
-    console.log("redisCheckCertificate", options);
-    // You will be provided one of these (which should be tried in this order)
-    // options.domains
-    // options.email // optional
-    // options.accountId // optional
+    _debug('le-store-redis.redisCheckCertificate options:', options);
 
     if(options.domains) {
-      return getByIndex('idx-d2c', options.domains[0], callback);
+      return _getByIndex('idx-d2c', options.domains[0], callback);
     } else if(options.email) {
-      return getByIndex('idx-e2c', options.email, callback);
+      return _getByIndex('idx-e2c', options.email, callback);
     } else if(options.accountId) {
-      return getByIndex('idx-a2c', options.accoundId, callback);
+      return _getByIndex('idx-a2c', options.accoundId, callback);
     }
 
     callback(new Error('le-store-redis.redisCheckCertificate requires ' +
       'options.domains, options.email, or options.accoundId'));
   }
 
+  /**
+   * Stores a certificate in the database.
+   *
+   * @param {Object[]} options - options passed to the storage call.
+   * @param {string} options[].domains - domains associated with
+   *   certificate.
+   * @param {string} options[].email - email address associated with
+   *   certificate.
+   * @param {string} options[].accountId - accound identifier associated with
+   *   certificate.
+   * @param {Object[]} pems - The PEM-encoded certificate data to store.
+   * @param {string} pems[].privkey - the private key.
+   * @param {string} pems[].cert - the certificate.
+   * @param {string} pems[].chain - the certificate chain.
+   * @param {Function} callback(err, pems) - called when an error occurs, or
+   *   when all the certificate data is successfully written to the database.
+   */
   function redisSetCertificate(options, pems, callback) {
-    console.log("redisSetCertificate", options, pems);
-    // options.domains   // each of these must be indexed
-    // options.email     // optional, should be indexed
-    // options.accountId // optional - same as set by you in accounts.set(options, keypair) above
-
-    // pems.privkey
-    // pems.cert
-    // pems.chain
-
+    _debug('le-store-redis.redisSetCertificate',
+      '\noptions:', options, '\npems:', pems);
     var certId = 'cert-' + crypto.createHash('sha256')
       .update(pems.cert).digest('hex');
     var cert = _.cloneDeep(pems);
@@ -263,14 +341,14 @@ module.exports.create = function(options) {
       function(callback) {
         if(options.accountId) {
           // create an accountId to cert index
-          return createIndex('idx-a2c', options.accountId, certId, callback);
+          return _createIndex('idx-a2c', options.accountId, certId, callback);
         }
         callback();
       },
       function(callback) {
         if(options.email) {
           // create an email to cert index
-          return createIndex('idx-e2c', options.email, certId, callback);
+          return _createIndex('idx-e2c', options.email, certId, callback);
         }
         callback();
       },
@@ -278,7 +356,7 @@ module.exports.create = function(options) {
         if(options.domains) {
           // create a domain to cert index
           return async.each(options.domains, function(domain, callback) {
-            createIndex('idx-d2c', domain, certId, callback);
+            _createIndex('idx-d2c', domain, certId, callback);
           }, function(err) {
             callback(err);
           });
@@ -292,6 +370,58 @@ module.exports.create = function(options) {
     });
   }
 
+  // utility function to create a Redis-based index to a particular value
+  function _createIndex(indexName, indexData, value, callback) {
+    // generate the index value
+    var index = indexName + '-' +
+      crypto.createHash('sha256').update(indexData).digest('hex');
+
+    client.set(index, value, callback);
+  }
+
+  // utility function to get a Redis-based value based on an index
+  function _getByIndex(indexName, indexData, callback) {
+    // generate the index
+    var index = indexName + '-' +
+      crypto.createHash('sha256').update(indexData).digest('hex');
+
+    // fetch the value of the index
+    client.get(index, function(err, reply) {
+      if(err) {
+        return callback(err);
+      }
+      if(!reply) {
+        // index does not exist
+        return callback(null, null);
+      }
+
+      // fetch the actual data
+      client.get(reply, _deserializeJson(callback));
+    });
+  }
+
+  // utility function to deserialize data from JSON
+  function _deserializeJson(callback) {
+    return function(err, result) {
+      if(err) {
+        return callback(err);
+      }
+      if(result) {
+        return callback(null, JSON.parse(result));
+      }
+
+      callback(err, result);
+    };
+  }
+
+  // utility debug function
+  function _debug(callback) {
+    if(options.debug) {
+      console.log.apply(null, arguments);
+    }
+  }
+
+  // return an object that follows the le-store-SPEC interface
   return {
     getOptions: getRedisOptions,
     accounts: {
