@@ -9,7 +9,7 @@ a number of application front-end systems.
 ## Security Warning
 
 It is strongly advised that any production Redis system is deployed
-using at least password-based authentication in addition to additional
+using at least password-based authentication in addition to
 protections like IP-based request limiting and client-side TLS
 certificates. Unauthorized access to the Redis database enables an
 attacker to spoof any certificate stored in the database.
