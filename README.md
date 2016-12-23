@@ -1,99 +1,61 @@
-# le-store-SPEC
+# le-store-redis
 
-The reference implementation, specification, template, and tests for creating an le-store- strategy.
+The Redis storage strategy for node-letsencrypt is capable of storing 
+and retrieving keypairs, accounts, certificates, and certificate 
+keypairs from a Redis database. It is most useful in production setups 
+where multiple load balancers need to provide HTTPS-based proxying for 
+a number of application front-end systems.
 
-The reference implementation is completely in-memory.
+## Security Warning
 
-See [Help Wanted: Database Plugins (for saving certs)](https://github.com/Daplie/node-letsencrypt/issues/39)
+It is strongly advised that any production Redis system is deployed 
+using at least password-based authentication in addition to additional 
+protections like IP-based request limiting and client-side TLS 
+certificates. Unauthorized access to the Redis database enables an 
+attacker to spoof any certificate stored in the database.
 
-How to create a custom strategy
-===============================
+## Options
 
-READ THIS README:
-Believe it or not, most of your answers are either right here
-or in the comments in the sample code in `index.js`.
+The following options may be set in the `options` parameter:
 
-Now, let's say there's some new database AwesomeDB that
-we want to make a plugin for, here's how we'd start:
+* {boolean} debug - set to ```true``` if debug output is desired.
+* {object} redisOptions - options passed to the 
+  [Redis driver](http://redis.js.org/#api-rediscreateclient)
 
-```bash
-# First create you repo on github or wherever
-# Then clone it
-git clone git@github.com:AwesomeDB/le-store-awesome.git
+## Usage Example
 
-pushd le-store-awesome
+To instantiate a Redis-based Let's Encrypt plugin:
 
-# IMPORTANT: we pull in the 'template' branch, which has the skeleton code
-git pull https://github.com/Daplie/le-store-SPEC.git template
-
-git push
+```javascript
+  // configure Redis-based Let's Encrypt storage backend for storing keys and certs
+  var leStore = require('le-store-redis').create({
+    debug: true
+    redisOptions: {
+      db: 2,
+      password: 'M3C1lSO1kLBdPd95tJGu1I0OtTp4c5Rz'
+    }
+  });
 ```
 
-Or, if you already have some code and just need to merge in the tests:
+This object may then be used in the Let's Encrypt constructor.
 
-```bash
-git pull https://github.com/Daplie/le-store-SPEC.git tests
-```
+# Database Layout
 
-Next, Just run the tests
+ The Redis database is designed to be scalable to at least thousands of
+ domains. Scalability past tens of thousands of domains has not been tested,
+ but should work (in theory) based on the indexing layout and available
+ memory.
+ 
+ There are three primary types of data that are stored in the database:
+ 
+ * Keypairs are stored in **keypair-HASH** entries.
+ * Accounts are stored in **account-HASH** entries.
+ * Certificates are stored in **cert-HASH** entries.
 
-```
-node tests/basic.js
-```
+There are five types of indexes in the database:
 
-Note: you should not modify the tests that come from the tests branch,
-but rather create separate files for your own tests.
-
-API
-===
-
-```
-* getOptions()
-* accounts.
-  * checkKeypair(opts, cb)
-  * setKeypair(opts, keypair, cb)
-  * check(opts, cb)
-  * set(opts, reg, cb)
-* certificates.
-  * checkKeypair(opts, cb)
-  * setKeypair(opts, keypair, cb)
-  * check(opts, cb)
-  * set(opts, certs, cb)
-```
-
-Keypairs
---------
-
-For convenience, the keypair object will always contain **both** PEM and JWK
-versions of the private and/or public keys when being passed to the `*Keypair` functions.
-
-**set**
-
-`setKeypair` will always be called with `email` and **all three** forms of the keypair:
-`privateKeyPem`, `publicKeyPem`, and `privateKeyJwk`. It's easy to generate `publicKeyJwk`
-from `privateKeyJwk` because it is just a copy of the public fields `e` and `n`.
-
-```
-// keypair looks like this
-{ privateKeyPem: '...'
-, publicKeyPem: '...'
-, privateKeyJwk: { ... }
-}
-```
-
-**check**
-
-`checkKeypair` may be called with any of `email`, `accountId`, and `keypair` - which will
-contain only `publicKeyPem` and `publicKeyJwk`.
-
-```
-// opts looks like this
-{
-  email: '...@...'
-, accountId: '...'
-, keypair: {
-    publicKeyPem: '...'
-  , publicKeyJwk: { ... }
-  }
-}
-```
+ * **idx-e2a-HASH** entries store email to account mappings.
+ * **idx-e2k-HASH** entries store email to keypair mappings.
+ * **idx-e2c-HASH** entries store email to certificate mappings.
+ * **idx-a2c-HASH** entries store account to certificate mappings.
+ * **idx-d2c-HASH** entries store domain to certificate mappings.
