@@ -35,7 +35,7 @@
  *
  * By default, since Let's Encrypt certificates are valid for 90 days, all
  * certificate data expires after 100 days. Account and keypair data persists
- * forever.
+ * forever and must be cleared manually.
  *
  * Options to the Redis driver may be passed in via redisOptions. More on
  * Redis options can be viewed at http://redis.js.org/#api-rediscreateclient
@@ -49,6 +49,9 @@ var redis = require('redis');
  * Creates a new instance of a le-store-redis storage plugin.
  *
  * @param {Object[]} options - options passed to storage called
+ * @param {string} options[].debug - set to true to enable debugging output.
+ * @param {string} options[].certExpiry - delete certificate entries from
+ *   database after this many seconds, default is 100 days.
  * @param {string} options[].redisOptions - options that are useful to the
  *   Redis driver. Full documentation for all the Redis options can be viewed
  *   at http://redis.js.org/#api-rediscreateclient. By default,
@@ -70,7 +73,7 @@ module.exports.create = function(options) {
   function getRedisOptions() {
     var defaults = {
       debug: false,
-      dataExpiry: 100 * 60 * 60 * 24, // all cert data expires after 100 days
+      certExpiry: 100 * 60 * 60 * 24, // all cert data expires after 100 days
       redisOptions: {
         db: 3,
         retry_strategy: function(options) {
@@ -244,14 +247,14 @@ module.exports.create = function(options) {
       function(callback) {
         // write the cert to the database
         client.set(keypairId, jsonKeypair, callback);
-        return client.expire(keypairId, moduleOptions.dataExpiry);
+        return client.expire(keypairId, moduleOptions.certExpiry);
       },
       function(callback) {
         if(options.domains) {
           // create a domain to keypair index
           return async.each(options.domains, function(domain, callback) {
             _createIndex('idx-d2k', domain, keypairId,
-              module.options.dataExpiry, callback);
+              module.options.certExpiry, callback);
           }, function(err) {
             callback(err);
           });
@@ -344,13 +347,13 @@ module.exports.create = function(options) {
       function(callback) {
         // write the cert to the database
         client.set(certId, jsonCert, callback);
-        return client.expire(certId, moduleOptions.dataExpiry);
+        return client.expire(certId, moduleOptions.certExpiry);
       },
       function(callback) {
         if(options.accountId) {
           // create an accountId to cert index
           return _createIndex('idx-a2c', options.accountId, certId,
-            moduleOptions.dataExpiry, callback);
+            moduleOptions.certExpiry, callback);
         }
         callback();
       },
@@ -358,7 +361,7 @@ module.exports.create = function(options) {
         if(options.email) {
           // create an email to cert index
           return _createIndex('idx-e2c', options.email, certId,
-            moduleOptions.dataExpiry, callback);
+            moduleOptions.certExpiry, callback);
         }
         callback();
       },
@@ -367,7 +370,7 @@ module.exports.create = function(options) {
           // create a domain to cert index
           return async.each(options.domains, function(domain, callback) {
             _createIndex('idx-d2c', domain, certId,
-              moduleOptions.dataExpiry, callback);
+              moduleOptions.certExpiry, callback);
           }, function(err) {
             callback(err);
           });

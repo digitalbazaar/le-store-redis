@@ -1,17 +1,17 @@
 # le-store-redis
 
-The Redis storage strategy for node-letsencrypt is capable of storing 
-and retrieving keypairs, accounts, certificates, and certificate 
-keypairs from a Redis database. It is most useful in production setups 
-where multiple load balancers need to provide HTTPS-based proxying for 
+The Redis storage strategy for node-letsencrypt is capable of storing
+and retrieving keypairs, accounts, certificates, and certificate
+keypairs from a Redis database. It is most useful in production setups
+where multiple load balancers need to provide HTTPS-based proxying for
 a number of application front-end systems.
 
 ## Security Warning
 
-It is strongly advised that any production Redis system is deployed 
-using at least password-based authentication in addition to additional 
-protections like IP-based request limiting and client-side TLS 
-certificates. Unauthorized access to the Redis database enables an 
+It is strongly advised that any production Redis system is deployed
+using at least password-based authentication in addition to additional
+protections like IP-based request limiting and client-side TLS
+certificates. Unauthorized access to the Redis database enables an
 attacker to spoof any certificate stored in the database.
 
 ## Options
@@ -19,7 +19,9 @@ attacker to spoof any certificate stored in the database.
 The following options may be set in the `options` parameter:
 
 * {boolean} debug - set to ```true``` if debug output is desired.
-* {object} redisOptions - options passed to the 
+* {integer} certExpiry - delete certificate entries from
+    database after this many seconds, default is 100 days.
+* {object} redisOptions - options passed to the
   [Redis driver](http://redis.js.org/#api-rediscreateclient)
 
 ## Usage Example
@@ -45,9 +47,9 @@ This object may then be used in the Let's Encrypt constructor.
  domains. Scalability past tens of thousands of domains has not been tested,
  but should work (in theory) based on the indexing layout and available
  memory.
- 
+
  There are three primary types of data that are stored in the database:
- 
+
  * Keypairs are stored in **keypair-HASH** entries.
  * Accounts are stored in **account-HASH** entries.
  * Certificates are stored in **cert-HASH** entries.
