@@ -1,6 +1,6 @@
 {
   "name": "le-store-redis",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "The Redis storage strategy for node-letsencrypt",
   "main": "index.js",
   "scripts": {
