@@ -254,7 +254,7 @@ module.exports.create = function(options) {
           // create a domain to keypair index
           return async.each(options.domains, function(domain, callback) {
             _createIndex('idx-d2k', domain, keypairId,
-              module.options.certExpiry, callback);
+              moduleOptions.certExpiry, callback);
           }, function(err) {
             callback(err);
           });
@@ -327,19 +327,19 @@ module.exports.create = function(options) {
    *   certificate.
    * @param {string} options[].accountId - accound identifier associated with
    *   certificate.
-   * @param {Object[]} pems - The PEM-encoded certificate data to store.
-   * @param {string} pems[].privkey - the private key.
-   * @param {string} pems[].cert - the certificate.
-   * @param {string} pems[].chain - the certificate chain.
+   * @param {Object[]} options[].pems - The PEM-encoded certificate data to store.
+   * @param {string} options[].pems[].privkey - the private key.
+   * @param {string} options[].pems[].cert - the certificate.
+   * @param {string} options[].pems[].chain - the certificate chain.
    * @param {Function} callback(err, pems) - called when an error occurs, or
    *   when all the certificate data is successfully written to the database.
    */
-  function redisSetCertificate(options, pems, callback) {
+  function redisSetCertificate(options, callback) {
     _debug('le-store-redis.redisSetCertificate',
-      '\noptions:', options, '\npems:', pems);
+      '\noptions:', options);
     var certId = 'cert-' + crypto.createHash('sha256')
-      .update(pems.cert).digest('hex');
-    var cert = _.cloneDeep(pems);
+      .update(options.pems.cert).digest('hex');
+    var cert = _.cloneDeep(options.pems);
 
     var jsonCert = JSON.stringify(cert);
 
