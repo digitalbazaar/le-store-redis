@@ -33,6 +33,10 @@
  * idx-a2c-HASH entries store account to certificate mappings.
  * idx-d2c-HASH entries store domain to certificate mappings.
  *
+ * By default, since Let's Encrypt certificates are valid for 90 days, all
+ * certificate data expires after 100 days. Account and keypair data persists
+ * forever.
+ *
  * Options to the Redis driver may be passed in via redisOptions. More on
  * Redis options can be viewed at http://redis.js.org/#api-rediscreateclient
  */
@@ -66,6 +70,7 @@ module.exports.create = function(options) {
   function getRedisOptions() {
     var defaults = {
       debug: false,
+      dataExpiry: 100 * 60 * 60 * 24, // all cert data expires after 100 days
       redisOptions: {
         db: 3,
         retry_strategy: function(options) {
@@ -238,13 +243,15 @@ module.exports.create = function(options) {
     async.parallel([
       function(callback) {
         // write the cert to the database
-        return client.set(keypairId, jsonKeypair, callback);
+        client.set(keypairId, jsonKeypair, callback);
+        return client.expire(keypairId, moduleOptions.dataExpiry);
       },
       function(callback) {
         if(options.domains) {
           // create a domain to keypair index
           return async.each(options.domains, function(domain, callback) {
-            _createIndex('idx-d2k', domain, keypairId, callback);
+            _createIndex('idx-d2k', domain, keypairId,
+              module.options.dataExpiry, callback);
           }, function(err) {
             callback(err);
           });
@@ -336,19 +343,22 @@ module.exports.create = function(options) {
     async.parallel([
       function(callback) {
         // write the cert to the database
-        return client.set(certId, jsonCert, callback);
+        client.set(certId, jsonCert, callback);
+        return client.expire(certId, moduleOptions.dataExpiry);
       },
       function(callback) {
         if(options.accountId) {
           // create an accountId to cert index
-          return _createIndex('idx-a2c', options.accountId, certId, callback);
+          return _createIndex('idx-a2c', options.accountId, certId,
+            moduleOptions.dataExpiry, callback);
         }
         callback();
       },
       function(callback) {
         if(options.email) {
           // create an email to cert index
-          return _createIndex('idx-e2c', options.email, certId, callback);
+          return _createIndex('idx-e2c', options.email, certId,
+            moduleOptions.dataExpiry, callback);
         }
         callback();
       },
@@ -356,7 +366,8 @@ module.exports.create = function(options) {
         if(options.domains) {
           // create a domain to cert index
           return async.each(options.domains, function(domain, callback) {
-            _createIndex('idx-d2c', domain, certId, callback);
+            _createIndex('idx-d2c', domain, certId,
+              moduleOptions.dataExpiry, callback);
           }, function(err) {
             callback(err);
           });
@@ -371,12 +382,29 @@ module.exports.create = function(options) {
   }
 
   // utility function to create a Redis-based index to a particular value
-  function _createIndex(indexName, indexData, value, callback) {
+  function _createIndex(indexName, indexData, value, ex, cb) {
+    var callback = cb;
+    var expiry = ex;
+    if(!callback) {
+      expiry = null;
+      callback = ex;
+    }
+
     // generate the index value
     var index = indexName + '-' +
       crypto.createHash('sha256').update(indexData).digest('hex');
 
-    client.set(index, value, callback);
+    client.set(index, value, function(err, reply) {
+      if(err) {
+        return callback(err);
+      }
+      if(expiry) {
+        return client.expire(index, expiry, function(err) {
+          callback(err, reply);
+        });
+      }
+      callback(err, reply);
+    });
   }
 
   // utility function to get a Redis-based value based on an index
