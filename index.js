@@ -305,7 +305,7 @@ module.exports.create = function(options) {
     _debug('le-store-redis.redisCheckCertificate:',
       options.domains, options.email, options.accountId);
 
-    if(options.domains) {
+    if(options.domains && options.domains.length > 0) {
       return _getByIndex('idx-d2c', options.domains[0], callback);
     } else if(options.email) {
       return _getByIndex('idx-e2c', options.email, callback);
