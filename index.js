@@ -103,8 +103,7 @@ module.exports.create = function(options) {
    *   when a keypair is successfully written to the database.
    */
   function redisSetAccountKeypair(options, keypair, callback) {
-    _debug('le-store-redis.redisSetAccountKeypair',
-      '\noptions:', options, '\nkeypair:', keypair);
+    _debug('le-store-redis.redisSetAccountKeypair', '\nkeypair:', keypair);
     var keypairId = 'keypair-' +
       crypto.createHash('sha256').update(keypair.publicKeyPem).digest('hex');
     var jsonKeypair = JSON.stringify(keypair);
@@ -142,7 +141,8 @@ module.exports.create = function(options) {
    *   keypair will be null if it was not found.
    */
   function redisCheckAccountKeypair(options, callback) {
-    _debug('le-store-redis.redisCheckAccountKeypair options:', options);
+    _debug('le-store-redis.redisCheckAccountKeypair:',
+      options.email, options.accountId);
 
     if(options.email) {
       return _getByIndex('idx-e2k', options.email, callback);
@@ -169,7 +169,8 @@ module.exports.create = function(options) {
    *   when an account is successfully retrieved from the database.
    */
   function redisCheckAccount(options, callback) {
-    _debug('le-store-redis.redisCheckAccount options:', options);
+    _debug('le-store-redis.redisCheckAccount:',
+      options.email, options.accountId, options.domains);
 
     if(options.email) {
       return _getByIndex('idx-e2a', options.email, callback);
@@ -196,8 +197,7 @@ module.exports.create = function(options) {
    * @param {Function} callback(err, account) - called after storage attempt.
    */
   function redisSetAccount(options, reg, callback) {
-    _debug('le-store-redis.redisSetAccount',
-      '\noptions:', options, '\nregistration:', reg);
+    _debug('le-store-redis.redisSetAccount', '\nregistration:', reg);
     var accountId = 'account-' + crypto.createHash('sha256')
       .update(reg.keypair.publicKeyPem).digest('hex');
     var account = _.cloneDeep(reg);
@@ -237,8 +237,7 @@ module.exports.create = function(options) {
    *   when a keypair is successfully written to the database.
    */
   function redisSetCertificateKeypair(options, keypair, callback) {
-    _debug('le-store-redis.redisSetCertificateKeypair',
-      '\noptions:', options, '\nkeypair:', keypair);
+    _debug('le-store-redis.redisSetCertificateKeypair', '\nkeypair:', keypair);
     var keypairId = 'keypair-' + crypto.createHash('sha256')
       .update(keypair.publicKeyPem).digest('hex');
     var jsonKeypair = JSON.stringify(keypair);
@@ -278,7 +277,7 @@ module.exports.create = function(options) {
    *   keypair will be null if it was not found.
    */
   function redisCheckCertificateKeypair(options, callback) {
-    _debug('le-store-redis.redisCheckCertificateKeypair options:', options);
+    _debug('le-store-redis.redisCheckCertificateKeypair:', options.domains);
 
     if(options.domains && options.domains[0]) {
       return _getByIndex('idx-d2k', options.domains[0], callback);
@@ -303,7 +302,8 @@ module.exports.create = function(options) {
    *   when a certificate is successfully retrieved from the database.
    */
   function redisCheckCertificate(options, callback) {
-    _debug('le-store-redis.redisCheckCertificate options:', options);
+    _debug('le-store-redis.redisCheckCertificate:',
+      options.domains, options.email, options.accountId);
 
     if(options.domains) {
       return _getByIndex('idx-d2c', options.domains[0], callback);
@@ -336,7 +336,7 @@ module.exports.create = function(options) {
    */
   function redisSetCertificate(options, callback) {
     _debug('le-store-redis.redisSetCertificate',
-      '\noptions:', options);
+      '\npems:', options.pems);
     var certId = 'cert-' + crypto.createHash('sha256')
       .update(options.pems.cert).digest('hex');
     var cert = _.cloneDeep(options.pems);
