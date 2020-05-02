@@ -4,7 +4,9 @@
   "description": "The Redis storage strategy for node-letsencrypt",
   "main": "index.js",
   "scripts": {
-    "test": "node tests/basic.js"
+    "test": "node tests/basic.js",
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -24,9 +26,11 @@
   "homepage": "https://github.com/digitalbazaar/le-store-redis#readme",
   "dependencies": {
     "async": "^2.1.4",
-    "redis": "^2.6.3"
+    "redis": "^2.6.3",
+    "snyk": "^1.316.2"
   },
   "devDependencies": {
     "bluebird": "^3.4.1"
-  }
+  },
+  "snyk": true
 }
